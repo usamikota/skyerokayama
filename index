@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>岡山・備後全域 ドローン鳥獣害対策 事業アプローチ分析（優先度・ステークホルダー版）</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            background-color: #FAFAF9; /* stone-50 */
+            color: #292524; /* stone-800 */
+        }
+        
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 40vh; 
+            max-height: 500px;
+        }
+
+        @media (max-width: 767px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+
+        .tab-btn.active {
+            border-bottom: 4px solid #065F46; /* emerald-800 */
+            color: #065F46;
+            font-weight: bold;
+            background-color: #ECFDF5;
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.4s ease-out forwards;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .municipality-card {
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        .municipality-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            border-color: #059669; /* emerald-600 */
+        }
+        .municipality-card.selected {
+            background-color: #ECFDF5; /* emerald-50 */
+            border-color: #065F46; /* emerald-800 */
+            border-width: 2px;
+        }
+
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        
+        .stakeholder-badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-right: 0.25rem;
+            margin-bottom: 0.25rem;
+            background-color: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.4);
+        }
+    </style>
+
+    <!-- Chosen Palette: Natural Earth (Backgrounds: #FAFAF9 Stone-50, Primary: #065F46 Emerald-800, Secondary/UI: #059669 Emerald-600, Accents: #B45309 Amber-700, #44403C Stone-700, #2563EB Blue-600) -->
+    
+    <!-- Application Structure Plan: 
+    対象33自治体を網羅した上で、限られた営業リソースを最適配分するため、「アプローチ優先度ランキング」セクションを新設。
+    1. エリアサマリー (Overview): 領域の全体像と市町村分布。
+    2. アプローチ優先度ランキング (Ranking): 推定被害額・予算から算出した上位10自治体をChart.jsで可視化。クリックで詳細なステークホルダーを表示し、誰に営業すべきかを明確化。
+    3. 全自治体リスト (Target List): 全33自治体をフィルタリング可能にし、選択地域の詳細（ステークホルダー含む）をパネル表示。
+    4. 地形別戦略 (Strategy): 地形別の技術的アプローチ。
+    この構造により、全体像の把握 -> 優先ターゲットの選定 -> 各ターゲットの詳細分析 -> 具体的な技術提案 という営業戦略策定のフローを自然に支援する。 -->
+    
+    <!-- Visualization & Content Choices: 
+    1. エリア別市町村構成 (サマリー) -> Compare -> ドーナツチャート (Chart.js)。SVG不使用。
+    2. 優先度ランキング (ランキング) -> Compare/Organize -> 横棒グラフ (Chart.js)。インタラクション：バー選択で右側の詳細パネル（ステークホルダー・予算内訳）を更新。複雑な指標を一つのスコアに集約して比較容易に。SVG不使用。
+    3. 自治体リスト (リスト) -> Organize -> インタラクティブHTMLグリッド。ステークホルダー情報をタグ形式で視覚的に整理。SVG不使用。
+    4. 地形別ソリューション図解 (戦略) -> Organize -> HTML Flexbox/Grid。SVG/Mermaid不使用。 -->
+    
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <header class="bg-emerald-800 text-stone-50 shadow-md sticky top-0 z-20">
+        <div class="max-w-6xl mx-auto px-4 py-5 md:py-8">
+            <h1 class="text-xl md:text-3xl font-bold tracking-tight mb-2">岡山・備後 ドローン鳥獣害対策 事業アプローチ分析</h1>
+            <p class="text-emerald-100 text-sm md:text-base">全33自治体の網羅リスト、優先度ランキング、および主要ステークホルダーマッピング</p>
+        </div>
+        
+        <nav class="bg-white border-b border-stone-200 text-stone-600">
+            <div class="max-w-6xl mx-auto px-4 flex overflow-x-auto no-scrollbar">
+                <button onclick="switchTab('overview')" id="tab-overview" class="tab-btn px-4 py-3 text-sm md:text-base whitespace-nowrap transition-colors border-r border-stone-200">1. サマリー</button>
+                <button onclick="switchTab('ranking')" id="tab-ranking" class="tab-btn active px-4 py-3 text-sm md:text-base whitespace-nowrap transition-colors border-r border-stone-200">2. 優先度ランキング</button>
+                <button onclick="switchTab('list')" id="tab-list" class="tab-btn px-4 py-3 text-sm md:text-base whitespace-nowrap transition-colors border-r border-stone-200">3. 自治体全リスト (33)</button>
+                <button onclick="switchTab('strategy')" id="tab-strategy" class="tab-btn px-4 py-3 text-sm md:text-base whitespace-nowrap transition-colors">4. 地形別戦略</button>
+            </div>
+        </nav>
+    </header>
+
+    <main class="flex-grow w-full max-w-6xl mx-auto px-4 py-8">
+        
+        <!-- Section 1: Overview -->
+        <section id="section-overview" class="fade-in hidden">
+            <div class="mb-8">
+                <h2 class="text-2xl font-bold text-stone-800 mb-3 border-l-4 border-amber-700 pl-3">広域連携が鍵となる岡山・備後エリア</h2>
+                <p class="text-stone-600 leading-relaxed">
+                    本事業のターゲットは、岡山県内の全27市町村、および隣接する広島県備後地方の6市町（福山・尾道・三原・府中・世羅・神石高原）を合わせた計33自治体です。鳥獣は県境を越えて移動するため、広域な調査データの共有と自治体間連携を促すアプローチが重要です。
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center bg-white rounded-xl shadow-sm border border-stone-200 p-6 md:p-8">
+                <div>
+                    <h3 class="font-bold text-lg text-emerald-800 mb-4 flex items-center"><span class="text-2xl mr-2">📊</span> 対象33自治体のエリア構成</h3>
+                    <ul class="space-y-3 mb-6">
+                        <li class="flex justify-between items-center border-b border-stone-100 pb-2">
+                            <span class="font-semibold text-stone-700">広島県 備後地方</span>
+                            <span class="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-sm font-bold">6 市町</span>
+                        </li>
+                        <li class="flex justify-between items-center border-b border-stone-100 pb-2">
+                            <span class="font-semibold text-stone-700">岡山県 備前エリア</span>
+                            <span class="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-bold">7 市町</span>
+                        </li>
+                        <li class="flex justify-between items-center border-b border-stone-100 pb-2">
+                            <span class="font-semibold text-stone-700">岡山県 備中エリア</span>
+                            <span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-bold">10 市町</span>
+                        </li>
+                        <li class="flex justify-between items-center pb-2">
+                            <span class="font-semibold text-stone-700">岡山県 美作エリア</span>
+                            <span class="bg-stone-200 text-stone-800 px-3 py-1 rounded-full text-sm font-bold">10 市町村</span>
+                        </li>
+                    </ul>
+                </div>
+                <div class="chart-container" style="max-width: 400px;">
+                    <canvas id="areaChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 2: Ranking -->
+        <section id="section-ranking" class="fade-in block">
+            <div class="mb-6">
+                <h2 class="text-2xl font-bold text-stone-800 mb-3 border-l-4 border-blue-600 pl-3">今年度アプローチ優先度 トップ10自治体</h2>
+                <p class="text-stone-600 leading-relaxed text-sm md:text-base">
+                    農業産出額に基づく「推定被害規模」、行政の「対策予算ポテンシャル」、および「地形的課題（マンパワー不足度）」を統合し、今年度優先して営業アプローチを行うべき上位10自治体を抽出しました。グラフのバーを選択すると、具体的な攻略ステークホルダーが表示されます。
+                </p>
+                <p class="text-xs text-stone-400 mt-1">※被害額および予算額は、面積・農業産出額等の公開データに基づき算出した事業提案用の推定シミュレーション値です。</p>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6">
+                <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+                    <div class="lg:col-span-3">
+                        <h3 class="font-semibold text-stone-700 mb-4 flex justify-between items-center">
+                            <span>総合アプローチ優先度スコア</span>
+                            <span class="text-xs font-normal text-stone-500 bg-stone-100 px-2 py-1 rounded">タップして詳細表示</span>
+                        </h3>
+                        <div class="chart-container">
+                            <canvas id="rankingChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="lg:col-span-2 bg-stone-800 text-stone-100 rounded-xl p-6 shadow-inner flex flex-col relative overflow-hidden" id="rankingDetailBox">
+                        <!-- Initial state -->
+                        <div class="z-10 flex flex-col h-full justify-center text-center text-stone-400">
+                            <span class="text-4xl mb-3 block">👈</span>
+                            <p class="font-bold mb-2">ターゲットを分析</p>
+                            <p class="text-sm">左のグラフから自治体を選択すると、<br>攻略すべきステークホルダーと<br>予算規模の分析が表示されます。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 3: Target List -->
+        <section id="section-list" class="fade-in hidden flex flex-col h-full">
+            <div class="mb-6">
+                <h2 class="text-2xl font-bold text-stone-800 mb-3 border-l-4 border-emerald-600 pl-3">対象自治体 全33リストとステークホルダー</h2>
+                <p class="text-stone-600 leading-relaxed text-sm md:text-base">
+                    全33自治体をエリア別にリストアップしています。地域をクリックすると、具体的なドローン活用戦略と、連携すべき関係機関（ステークホルダー）の詳細が表示されます。
+                </p>
+            </div>
+
+            <div id="detail-panel" class="bg-emerald-800 text-stone-50 rounded-xl shadow-md p-6 md:p-8 mb-8 min-h-[220px] flex flex-col justify-center transition-all duration-300 border border-emerald-900">
+                <div class="text-center text-emerald-200/70">
+                    <span class="text-4xl block mb-2">👆</span>
+                    <p class="font-medium">下部のリストから自治体を選択してください</p>
+                </div>
+            </div>
+
+            <div class="mb-4 flex flex-wrap gap-2 sticky top-[72px] z-10 bg-[#FAFAF9] py-2">
+                <button onclick="filterList('all')" id="filter-all" class="filter-btn px-4 py-2 bg-stone-800 text-white text-sm rounded-full font-medium transition-colors hover:bg-stone-700">すべて (33)</button>
+                <button onclick="filterList('備後')" id="filter-備後" class="filter-btn px-4 py-2 bg-white text-stone-600 border border-stone-300 text-sm rounded-full font-medium transition-colors hover:bg-stone-100">広島 備後 (6)</button>
+                <button onclick="filterList('備前')" id="filter-備前" class="filter-btn px-4 py-2 bg-white text-stone-600 border border-stone-300 text-sm rounded-full font-medium transition-colors hover:bg-stone-100">岡山 備前 (7)</button>
+                <button onclick="filterList('備中')" id="filter-備中" class="filter-btn px-4 py-2 bg-white text-stone-600 border border-stone-300 text-sm rounded-full font-medium transition-colors hover:bg-stone-100">岡山 備中 (10)</button>
+                <button onclick="filterList('美作')" id="filter-美作" class="filter-btn px-4 py-2 bg-white text-stone-600 border border-stone-300 text-sm rounded-full font-medium transition-colors hover:bg-stone-100">岡山 美作 (10)</button>
+            </div>
+
+            <div id="municipality-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4 overflow-y-auto pb-8">
+            </div>
+        </section>
+
+        <!-- Section 4: Strategy -->
+        <section id="section-strategy" class="fade-in hidden">
+            <div class="mb-8">
+                <h2 class="text-2xl font-bold text-stone-800 mb-3 border-l-4 border-stone-800 pl-3">地形・環境別のドローンソリューション</h2>
+                <p class="text-stone-600 leading-relaxed">
+                    岡山・備後エリアに特有の3つの主要な地形環境に対する技術的アプローチを整理しました。
+                </p>
+            </div>
+
+            <div class="space-y-6">
+                
+                <div class="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden flex flex-col md:flex-row">
+                    <div class="bg-amber-50 text-amber-900 p-6 md:w-1/3 flex flex-col justify-center items-center text-center border-b md:border-b-0 md:border-r border-amber-200">
+                        <span class="text-5xl mb-3 block">🍋</span>
+                        <h3 class="font-bold text-xl mb-1">沿岸・島嶼部の急傾斜地</h3>
+                        <p class="text-sm font-medium opacity-80">尾道・三原・笠岡など</p>
+                    </div>
+                    <div class="p-6 md:w-2/3">
+                        <h4 class="font-bold text-stone-800 mb-2 border-b border-stone-100 pb-2">課題：物理的アクセスの限界</h4>
+                        <p class="text-sm text-stone-600 mb-4">果樹園が急傾斜地にあり、強固な柵の設置や見回りが地形的に極めて困難。</p>
+                        <h4 class="font-bold text-emerald-700 mb-2">ドローンアプローチ：空中からの非接触防衛</h4>
+                        <ul class="text-sm text-stone-700 space-y-2">
+                            <li class="flex items-start"><span class="text-amber-600 mr-2">✔</span> 3Dルート設定による急傾斜地を這うような自動パトロール飛行</li>
+                            <li class="flex items-start"><span class="text-amber-600 mr-2">✔</span> 強力なLEDフラッシュと指向性スピーカーによる上空からの追い払い</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden flex flex-col md:flex-row">
+                    <div class="bg-emerald-50 text-emerald-900 p-6 md:w-1/3 flex flex-col justify-center items-center text-center border-b md:border-b-0 md:border-r border-emerald-200">
+                        <span class="text-5xl mb-3 block">🌲</span>
+                        <h3 class="font-bold text-xl mb-1">広大な大規模山林・高原</h3>
+                        <p class="text-sm font-medium opacity-80">神石高原・真庭・新見など</p>
+                    </div>
+                    <div class="p-6 md:w-2/3">
+                        <h4 class="font-bold text-stone-800 mb-2 border-b border-stone-100 pb-2">課題：マンパワーの圧倒的不足</h4>
+                        <p class="text-sm text-stone-600 mb-4">面積が広大すぎる上、過疎化により猟友会の人員が不足。侵入ルートが把握しきれない。</p>
+                        <h4 class="font-bold text-emerald-700 mb-2">ドローンアプローチ：データ駆動型の捕獲支援</h4>
+                        <ul class="text-sm text-stone-700 space-y-2">
+                            <li class="flex items-start"><span class="text-emerald-600 mr-2">✔</span> 赤外線サーマルカメラを用いた夜間の広域生息域調査（ヒートマップ化）</li>
+                            <li class="flex items-start"><span class="text-emerald-600 mr-2">✔</span> 猟友会への最適罠配置場所のデータ提供と、バッファゾーンの3Dマッピング</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden flex flex-col md:flex-row">
+                    <div class="bg-blue-50 text-blue-900 p-6 md:w-1/3 flex flex-col justify-center items-center text-center border-b md:border-b-0 md:border-r border-blue-200">
+                        <span class="text-5xl mb-3 block">🍇</span>
+                        <h3 class="font-bold text-xl mb-1">都市近郊・平野部周辺</h3>
+                        <p class="text-sm font-medium opacity-80">福山・岡山・倉敷・総社など</p>
+                    </div>
+                    <div class="p-6 md:w-2/3">
+                        <h4 class="font-bold text-stone-800 mb-2 border-b border-stone-100 pb-2">課題：安全性と高級作物の保護</h4>
+                        <p class="text-sm text-stone-600 mb-4">住宅地と高級果樹園が近接。銃器を用いた駆除が困難であり、安全な対策が求められる。</p>
+                        <h4 class="font-bold text-emerald-700 mb-2">ドローンアプローチ：安全・正確な監視網</h4>
+                        <ul class="text-sm text-stone-700 space-y-2">
+                            <li class="flex items-start"><span class="text-blue-600 mr-2">✔</span> 住宅地に影響を与えない特殊音波等による威嚇</li>
+                            <li class="flex items-start"><span class="text-blue-600 mr-2">✔</span> オルソ画像作成による、自治体への正確な被害面積報告（補助金エビデンス）の支援</li>
+                        </ul>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="bg-stone-200 py-6 text-center text-stone-500 text-sm mt-auto">
+        <div class="max-w-6xl mx-auto px-4">
+            <p>Okayama & Bingo Region: Drone Wildlife Strategy Dashboard. Data is simulated for planning.</p>
+        </div>
+    </footer>
+
+    <script>
+        // Data Structure - Exactly 33 Municipalities with Score, Budget, Damage, Stakeholders
+        const municipalities = [
+            // --- 広島県備後 (6) ---
+            { id: 'h-onomichi', name: '尾道市', pref: '広島県', area: '備後', geo: '沿岸部・島嶼部・急傾斜', target: 'イノシシ(柑橘類)', 
+              score: 95, damage: 1.8, budget: 1.2,
+              stakeholders: ['尾道市農林水産課', 'JA尾道市', '広島県果樹農業協同組合', '尾道市猟友会'],
+              desc: '急傾斜地の柑橘畑が多く、人間による防護柵設置や見回りが極めて困難。ドローンによる上空からのパトロールと音・光による追い払いが、地形的制約を克服する最適解となる。JAと連携した果樹園防衛パッケージが有効。' },
+            { id: 'h-jinseki', name: '神石高原町', pref: '広島県', area: '備後', geo: '山間部・高原', target: 'シカ・イノシシ', 
+              score: 91, damage: 1.2, budget: 0.9,
+              stakeholders: ['神石高原町産業課', '神石高原町猟友会', '地元営農組織', '広島県林業試験場'],
+              desc: '極度の過疎化により猟友会のリソースが限界。広大な山林における赤外線カメラでの生息域調査と、効率的な罠配置提案（データ支援）が必須の地域。スマート農業予算を獲得しやすい。' },
+            { id: 'h-fukuyama', name: '福山市', pref: '広島県', area: '備後', geo: '平野部・中山間・沿岸', target: 'イノシシ・シカ', 
+              score: 85, damage: 1.5, budget: 1.5,
+              stakeholders: ['福山市農林水産課', 'JA福山市', '福山市猟友会', 'スマートシティ推進室'],
+              desc: '都市近郊の高級果樹から山間部まで環境が多様。住宅地に近いエリアでの銃器を使わない安全なドローン威嚇や、夜間の赤外線調査によるピンポイントな侵入経路特定が刺さる。財政力があり実証実験(PoC)を取りやすい。' },
+            { id: 'h-sera', name: '世羅町', pref: '広島県', area: '備後', geo: '高原・大規模農地', target: 'イノシシ・果樹・野菜', 
+              score: 82, damage: 1.3, budget: 0.8,
+              stakeholders: ['世羅町農業振興課', 'JAひろしま(世羅)', '大規模農業法人', '世羅町猟友会'],
+              desc: '県内有数の農業地帯。大規模な農園が多く、ドローンを用いた広域な被害状況マッピング（3Dオルソ画像）による正確な被害額算定の需要が高い。農業法人への直接営業も視野。' },
+            { id: 'h-mihara', name: '三原市', pref: '広島県', area: '備後', geo: '沿岸部・中山間', target: 'イノシシ・果樹', 
+              score: 75, damage: 0.9, budget: 0.6,
+              stakeholders: ['三原市農林水産課', 'JA三原', '三原市猟友会'],
+              desc: '尾道と同様に急傾斜地の果樹園を抱える。自動航行ルートを設定し、定期的な非接触駆除サービス（SaaS/RaaSモデル）の導入提案が有望。' },
+            { id: 'h-fuchu', name: '府中市', pref: '広島県', area: '備後', geo: '中山間部', target: 'イノシシ・シカ', 
+              score: 68, damage: 0.7, budget: 0.5,
+              stakeholders: ['府中市農林課', 'JA福山市(府中)', '府中市猟友会'],
+              desc: '山間部に囲まれた谷沿いの農地が多い。山際（バッファゾーン）での広域な監視と、AI画像解析による獣の自動検知システムの導入提案が効果的。' },
+            
+            // --- 岡山県備前 (7) ---
+            { id: 'o-okayama', name: '岡山市', pref: '岡山県', area: '備前', geo: '平野部・中山間', target: 'イノシシ・果樹', 
+              score: 88, damage: 2.1, budget: 1.8,
+              stakeholders: ['岡山市農林水産課', 'JA晴れの国岡山', '岡山県猟友会', '岡山大学(研究協力)'],
+              desc: '北部の山間地域を中心にマスカット等の高級果樹被害。住宅地近接エリアでの安全対策として、ドローン空撮データに基づく防護柵の最適設計支援が有効。予算規模は最大クラス。' },
+            { id: 'o-akaiwa', name: '赤磐市', pref: '岡山県', area: '備前', geo: '中山間部', target: 'イノシシ・果樹', 
+              score: 84, damage: 1.1, budget: 0.8,
+              stakeholders: ['赤磐市農林課', 'JA晴れの国岡山(赤磐)', '赤磐猟友会', '果樹部会'],
+              desc: '白桃やブドウの重要産地。収穫期前の数ヶ月間に特化した、集中的なドローンパトロール請負による忌避効果の持続サービスが鍵となる。' },
+            { id: 'o-kibichuo', name: '吉備中央町', pref: '岡山県', area: '備前', geo: '高原・山間部', target: 'イノシシ・シカ・水稲', 
+              score: 79, damage: 0.9, budget: 0.7,
+              stakeholders: ['吉備中央町農林課', '地元営農組合', '猟友会吉備中央支部'],
+              desc: '広大な農地が広がる高原。マンパワー不足を補うため、ドローンによる広域監視と、猟友会と連携した捕獲効率化パッケージの提案が最も響く。' },
+            { id: 'o-bizen', name: '備前市', pref: '岡山県', area: '備前', geo: '沿岸・中山間', target: 'イノシシ・シカ', 
+              score: 72, damage: 0.8, budget: 0.6,
+              stakeholders: ['備前市農林水産課', '備前猟友会'],
+              desc: '山林からの侵入経路が多数。被害状況の高精度マッピングと、重点的なドローンパトロールルートの策定による防衛線の構築を提案。' },
+            { id: 'o-setouchi', name: '瀬戸内市', pref: '岡山県', area: '備前', geo: '平野部・沿岸', target: 'イノシシ・水稲', 
+              score: 65, damage: 0.6, budget: 0.5,
+              stakeholders: ['瀬戸内市農林水産課', 'JA晴れの国岡山(瀬戸内)', '地元猟友会'],
+              desc: '平野部の優良農地への獣害。視界の開けた地形を活かし、広範囲を見渡せるドローンの早期発見・即時追い払い運用が適している。' },
+            { id: 'o-tamano', name: '玉野市', pref: '岡山県', area: '備前', geo: '沿岸部・丘陵', target: 'イノシシ', 
+              score: 60, damage: 0.5, budget: 0.4,
+              stakeholders: ['玉野市農林水産課', '玉野猟友会'],
+              desc: '丘陵地と農地が近接。赤外線カメラによる夜間の行動ルート把握に基づき、限られた罠をどこに設置すべきかのコンサルティングが刺さる。' },
+            { id: 'o-wake', name: '和気町', pref: '岡山県', area: '備前', geo: '中山間部', target: 'イノシシ・シカ', 
+              score: 55, damage: 0.4, budget: 0.3,
+              stakeholders: ['和気町産業振興課', '和気猟友会'],
+              desc: '山林境界が複雑。ドローンによる正確な境界線調査（3Dモデル化）と、地形に合わせた効率的な防護柵設置計画のデータ提供が有効。' },
+            
+            // --- 岡山県備中 (10) ---
+            { id: 'o-kurashiki', name: '倉敷市', pref: '岡山県', area: '備中', geo: '平野・丘陵', target: 'イノシシ・果樹', 
+              score: 86, damage: 1.6, budget: 1.4,
+              stakeholders: ['倉敷市農林水産課', 'JA晴れの国岡山(倉敷)', '倉敷市猟友会'],
+              desc: '北部の丘陵地帯で果樹被害。住宅地との境界において、発砲音を伴わないドローン搭載の特殊スピーカー等による安全な威嚇が求められる。' },
+            { id: 'o-niimi', name: '新見市', pref: '岡山県', area: '備中', geo: '山間部・カルスト', target: 'シカ・イノシシ', 
+              score: 90, damage: 1.3, budget: 1.0,
+              stakeholders: ['新見市農林課', 'JA晴れの国岡山(阿新)', '新見猟友会', '森林組合'],
+              desc: 'シカ被害が広域化し、猟友会の高齢化が著しい。赤外線ドローンによる調査（生息数・ルート把握）を起点とした、データ駆動型の対策コンサルティングを提案。' },
+            { id: 'o-takahashi', name: '高梁市', pref: '岡山県', area: '備中', geo: '山間部・急傾斜', target: 'イノシシ・サル', 
+              score: 81, damage: 1.0, budget: 0.8,
+              stakeholders: ['高梁市農林課', 'JA晴れの国岡山(びほく)', '高梁猟友会'],
+              desc: '急峻な地形が多く、人の立ち入りが困難。地形を無視して飛行できるドローンが必須であり、特にサルの群れの追跡・追い払いに効果を発揮する。' },
+            { id: 'o-ibara', name: '井原市', pref: '岡山県', area: '備中', geo: '中山間部', target: 'イノシシ・果樹', 
+              score: 77, damage: 0.9, budget: 0.7,
+              stakeholders: ['井原市農林課', '果樹部会', '井原猟友会'],
+              desc: 'ブドウの産地。高付加価値作物を守るための投資として、収穫前の集中パトロールと赤外線による生息監視のROI（費用対効果）を強調する。' },
+            { id: 'o-soja', name: '総社市', pref: '岡山県', area: '備中', geo: '平野・中山間', target: 'イノシシ', 
+              score: 74, damage: 0.8, budget: 0.6,
+              stakeholders: ['総社市農林課', 'JA晴れの国岡山(吉備路)', '総社猟友会'],
+              desc: '農地と山林が近接。ドローンによる被害状況の定期的なオルソ画像化サービスで、市への正確な報告と対策予算獲得のエビデンス作りを支援。' },
+            { id: 'o-kasaoka', name: '笠岡市', pref: '岡山県', area: '備中', geo: '沿岸・島嶼部', target: 'イノシシ', 
+              score: 69, damage: 0.6, budget: 0.5,
+              stakeholders: ['笠岡市農政水産課', '地元猟友会', '島嶼部自治会'],
+              desc: '島嶼部での被害。重機の持ち込みが困難な離島部において、機動力の高いドローンによる空からの調査・追い払いパッケージが不可欠。' },
+            { id: 'o-asakuchi', name: '浅口市', pref: '岡山県', area: '備中', geo: '沿岸・丘陵', target: 'イノシシ', 
+              score: 58, damage: 0.4, budget: 0.3,
+              stakeholders: ['浅口市産業建設部', '地元猟友会'],
+              desc: '丘陵地の果樹園被害。狭い農道での移動を伴わず、定点から広域をカバーできるドローンアプローチで労働負荷の軽減をアピール。' },
+            { id: 'o-yakage', name: '矢掛町', pref: '岡山県', area: '備中', geo: '中山間部', target: 'イノシシ・果樹', 
+              score: 54, damage: 0.3, budget: 0.3,
+              stakeholders: ['矢掛町産業観光課', '地元猟友会'],
+              desc: '谷沿いの農地への山際からの侵入ルート特定に、ドローンの俯瞰的な視点が不可欠。罠の効果的な配置計画策定を支援。' },
+            { id: 'o-satosho', name: '里庄町', pref: '岡山県', area: '備中', geo: '丘陵・平野', target: 'イノシシ', 
+              score: 45, damage: 0.2, budget: 0.2,
+              stakeholders: ['里庄町産業建設課'],
+              desc: '面積は小さいが、周辺自治体と連携した広域対策網の構築において、ドローン空撮データの共有基盤（クラウド連携）を提案。' },
+            { id: 'o-hayashima', name: '早島町', pref: '岡山県', area: '備中', geo: '平野部', target: 'ヌートリア等', 
+              score: 30, damage: 0.1, budget: 0.1,
+              stakeholders: ['早島町建設農林課'],
+              desc: '平野部中心で大型獣被害は少ない。水路周辺の小動物調査等、ニッチなドローン活用提案となる。' },
+
+            // --- 岡山県美作 (10) ---
+            { id: 'o-maniwa', name: '真庭市', pref: '岡山県', area: '美作', geo: '山間部・森林', target: 'シカ・クマ', 
+              score: 93, damage: 1.5, budget: 1.2,
+              stakeholders: ['真庭市林業・バイオマス産業課', '真庭森林組合', '真庭猟友会', '地元木材企業'],
+              desc: '面積が極めて広く森林が多い。林業へのシカ食害対策として、固定翼やVTOL型ドローンによる広域生態調査の導入が必須。林業予算からのアプローチ。' },
+            { id: 'o-tsuyama', name: '津山市', pref: '岡山県', area: '美作', geo: '盆地・中山間', target: 'シカ・イノシシ', 
+              score: 83, damage: 1.2, budget: 1.0,
+              stakeholders: ['津山市農林部', 'JA晴れの国岡山(津山)', '津山猟友会'],
+              desc: '美作地域の中心。周辺山林からの広範な侵入に対し、広域マッピングとドローンパトロール網の拠点（ハブ）としてのシステム導入を提案。' },
+            { id: 'o-mimasaka', name: '美作市', pref: '岡山県', area: '美作', geo: '山間部', target: 'シカ・イノシシ', 
+              score: 80, damage: 1.1, budget: 0.8,
+              stakeholders: ['美作市農林政策課', '美作猟友会', '美作森林組合'],
+              desc: 'シカの個体数増加が顕著。農地へ降りてくる前のバッファゾーン（山林内）でのドローンによる威嚇・押し戻し運用を重点的に提案。' },
+            { id: 'o-kagamino', name: '鏡野町', pref: '岡山県', area: '美作', geo: '山間部', target: 'シカ・サル', 
+              score: 71, damage: 0.7, budget: 0.5,
+              stakeholders: ['鏡野町産業観光課', '地元猟友会'],
+              desc: 'サルの群れによる被害対策。上空から群れの動きを追跡し、特殊音波で山奥へ追い払う動的なドローン運用が効果的。' },
+            { id: 'o-nishiawakura', name: '西粟倉村', pref: '岡山県', area: '美作', geo: '山間部・林業', target: 'シカ', 
+              score: 66, damage: 0.5, budget: 0.6,
+              stakeholders: ['西粟倉村産業観光課', '百年の森林構想推進室', '地元林業ベンチャー'],
+              desc: '林業特区。植林した苗木をシカから守るため、ドローンによる広域な追い払いパッケージを自治体や林業ベンチャーへ直接提案。予算化に積極的。' },
+            { id: 'o-misaki', name: '美咲町', pref: '岡山県', area: '美作', geo: '中山間部', target: 'イノシシ・シカ', 
+              score: 62, damage: 0.6, budget: 0.4,
+              stakeholders: ['美咲町産業観光課', '地元営農組合'],
+              desc: '棚田や山間の農地。ドローンによる被害状況のオルソ画像化で、市やJAと連携した効率的な対策計画の策定・予算化を支援。' },
+            { id: 'o-kumenan', name: '久米南町', pref: '岡山県', area: '美作', geo: '中山間・棚田', target: 'イノシシ', 
+              score: 59, damage: 0.5, budget: 0.3,
+              stakeholders: ['久米南町産業建設課'],
+              desc: '棚田などの複雑な地形。歩行での対策や罠設置が困難なため、空からの監視と追い払いが労働力削減（省力化）に直結することを訴求。' },
+            { id: 'o-shoo', name: '勝央町', pref: '岡山県', area: '美作', geo: '丘陵・中山間', target: 'イノシシ・果樹', 
+              score: 56, damage: 0.4, budget: 0.3,
+              stakeholders: ['勝央町産業建設部'],
+              desc: '果樹園等の点在する農地に対する、スポット的なドローンパトロール運用（シェアリング型）によるコストを抑えた導入を提案。' },
+            { id: 'o-nagi', name: '奈義町', pref: '岡山県', area: '美作', geo: '高原・山裾', target: 'シカ', 
+              score: 52, damage: 0.3, budget: 0.3,
+              stakeholders: ['奈義町産業環境課'],
+              desc: '山裾の農地へのシカの侵入警戒。センサーカメラ等の地上設備とドローンを連動させた総合監視システムの構築が有効。' },
+            { id: 'o-shinjo', name: '新庄村', pref: '岡山県', area: '美作', geo: '山間部', target: 'シカ・クマ', 
+              score: 48, damage: 0.2, budget: 0.2,
+              stakeholders: ['新庄村産業建設課'],
+              desc: '山深く人間による巡回が困難。ドローンによる定期的な状況確認と生息域の監視システムを提供し、住民の安心を担保する。' }
+        ];
+
+        // --- Utilities ---
+        function wrapLabel(text, maxChars = 12) {
+            if (typeof text !== 'string') return text;
+            if (text.length <= maxChars) return text;
+            const lines = [];
+            for (let i = 0; i < text.length; i += maxChars) {
+                lines.push(text.substring(i, i + maxChars));
+            }
+            return lines;
+        }
+
+        const commonTooltipConfig = {
+            callbacks: {
+                title: function(tooltipItems) {
+                    const item = tooltipItems[0];
+                    let label = item.chart.data.labels[item.dataIndex];
+                    if (Array.isArray(label)) return label.join('');
+                    return label;
+                }
+            }
+        };
+
+        Chart.defaults.font.family = "'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif";
+        Chart.defaults.color = '#57534E';
+
+        // --- State Management ---
+        const sections = ['overview', 'ranking', 'list', 'strategy'];
+        let chartsInitialized = { overview: false, ranking: false };
+        let charts = {};
+        let top10Municipalities = [];
+
+        function switchTab(tabId) {
+            sections.forEach(sec => {
+                document.getElementById('section-' + sec).classList.add('hidden');
+                document.getElementById('tab-' + sec).classList.remove('active', 'bg-emerald-50');
+                document.getElementById('tab-' + sec).classList.add('bg-white');
+            });
+            
+            document.getElementById('section-' + tabId).classList.remove('hidden');
+            const activeTabBtn = document.getElementById('tab-' + tabId);
+            activeTabBtn.classList.add('active', 'bg-emerald-50');
+            activeTabBtn.classList.remove('bg-white');
+            
+            if (tabId === 'overview' && !chartsInitialized.overview) {
+                initAreaChart();
+                chartsInitialized.overview = true;
+            }
+            if (tabId === 'ranking' && !chartsInitialized.ranking) {
+                initRankingChart();
+                chartsInitialized.ranking = true;
+            }
+        }
+
+        // --- Charts ---
+        function initAreaChart() {
+            const ctx = document.getElementById('areaChart').getContext('2d');
+            charts.overview = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['広島 備後(6)', '岡山 備前(7)', '岡山 備中(10)', '岡山 美作(10)'],
+                    datasets: [{
+                        data: [6, 7, 10, 10],
+                        backgroundColor: ['#D97706', '#059669', '#2563EB', '#A8A29E'],
+                        borderWidth: 2, borderColor: '#ffffff', hoverOffset: 5
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' }, tooltip: commonTooltipConfig },
+                    cutout: '60%'
+                }
+            });
+        }
+
+        function initRankingChart() {
+            // Sort by score and take top 10
+            top10Municipalities = [...municipalities].sort((a, b) => b.score - a.score).slice(0, 10);
+            
+            const labels = top10Municipalities.map(m => wrapLabel(`${m.pref} ${m.name}`));
+            const scores = top10Municipalities.map(m => m.score);
+            
+            // Generate colors based on area
+            const bgColors = top10Municipalities.map(m => {
+                if(m.area === '備後') return '#D97706'; // amber-600
+                if(m.area === '備前') return '#059669'; // emerald-600
+                if(m.area === '備中') return '#2563EB'; // blue-600
+                return '#44403C'; // stone-700
+            });
+
+            const ctx = document.getElementById('rankingChart').getContext('2d');
+            charts.ranking = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '優先度スコア',
+                        data: scores,
+                        backgroundColor: bgColors,
+                        borderRadius: 4,
+                        barPercentage: 0.7
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: commonTooltipConfig
+                    },
+                    scales: {
+                        x: { beginAtZero: true, max: 100, grid: { borderDash: [2, 2] } },
+                        y: { grid: { display: false }, ticks: { font: { size: 11 } } }
+                    },
+                    onClick: (e, activeEls) => {
+                        if (activeEls.length > 0) {
+                            const index = activeEls[0].index;
+                            showRankingDetail(index);
+                        }
+                    }
+                }
+            });
+            
+            // Show first item details by default
+            showRankingDetail(0);
+        }
+
+        function showRankingDetail(index) {
+            const m = top10Municipalities[index];
+            const box = document.getElementById('rankingDetailBox');
+            
+            let bgClass = 'bg-stone-800 border-stone-700';
+            let highlight = 'text-stone-300';
+            if(m.area === '備後') { bgClass = 'bg-amber-900 border-amber-800'; highlight = 'text-amber-300'; }
+            if(m.area === '備前') { bgClass = 'bg-emerald-900 border-emerald-800'; highlight = 'text-emerald-300'; }
+            if(m.area === '備中') { bgClass = 'bg-blue-900 border-blue-800'; highlight = 'text-blue-300'; }
+            
+            let stakeholdersHtml = m.stakeholders.map(s => `<span class="stakeholder-badge">${s}</span>`).join('');
+
+            box.className = `lg:col-span-2 ${bgClass} text-stone-100 rounded-xl p-6 shadow-inner flex flex-col relative overflow-hidden transition-colors duration-300`;
+            box.innerHTML = `
+                <div class="z-10 relative h-full flex flex-col">
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="inline-block px-3 py-1 rounded text-xs font-bold bg-white/20">RANK ${index + 1}</span>
+                        <span class="text-3xl font-black ${highlight}">${m.score} pt</span>
+                    </div>
+                    <h4 class="text-2xl font-bold text-white mb-1">${m.name}</h4>
+                    <span class="text-sm opacity-80 mb-4 block">${m.pref} ${m.area}</span>
+                    
+                    <div class="grid grid-cols-2 gap-2 mb-4 bg-black/20 p-3 rounded-lg">
+                        <div>
+                            <span class="text-xs opacity-70 block mb-1">推定被害額</span>
+                            <span class="font-bold text-lg">約${m.damage}億円</span>
+                        </div>
+                        <div>
+                            <span class="text-xs opacity-70 block mb-1">対策予算規模(推計)</span>
+                            <span class="font-bold text-lg ${highlight}">約${m.budget}億円</span>
+                        </div>
+                    </div>
+
+                    <div class="mb-4 flex-grow">
+                        <span class="text-xs font-bold opacity-70 mb-2 block border-b border-white/20 pb-1">主要アプローチ先 (ステークホルダー)</span>
+                        <div class="mt-2">${stakeholdersHtml}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- List UI Logic ---
+        function getAreaColorClass(area) {
+            switch(area) {
+                case '備後': return 'text-amber-700 bg-amber-50 border-amber-200';
+                case '備前': return 'text-emerald-700 bg-emerald-50 border-emerald-200';
+                case '備中': return 'text-blue-700 bg-blue-50 border-blue-200';
+                case '美作': return 'text-stone-700 bg-stone-100 border-stone-200';
+                default: return 'text-stone-600 bg-stone-50';
+            }
+        }
+
+        function renderGrid(filterArea) {
+            const grid = document.getElementById('municipality-grid');
+            grid.innerHTML = '';
+            
+            const filtered = filterArea === 'all' 
+                ? municipalities 
+                : municipalities.filter(m => m.area === filterArea);
+
+            filtered.forEach(m => {
+                const colorClasses = getAreaColorClass(m.area);
+                const card = document.createElement('div');
+                card.className = `municipality-card bg-white border border-stone-200 rounded-lg p-4 flex flex-col justify-between`;
+                card.id = `card-${m.id}`;
+                card.onclick = () => showDetail(m.id);
+                
+                card.innerHTML = `
+                    <div>
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="text-xs font-bold px-2 py-0.5 rounded border ${colorClasses}">${m.area}</span>
+                        </div>
+                        <h4 class="font-bold text-stone-800 text-lg mb-1">${m.name}</h4>
+                        <p class="text-xs text-stone-500 line-clamp-1 mb-2">${m.geo}</p>
+                        <div class="text-xs text-stone-400">優先度: <span class="font-bold text-stone-600">${m.score}</span></div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function filterList(area) {
+            // Update button styles
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('bg-stone-800', 'text-white');
+                btn.classList.add('bg-white', 'text-stone-600');
+            });
+            const activeBtn = document.getElementById(`filter-${area}`);
+            activeBtn.classList.remove('bg-white', 'text-stone-600');
+            activeBtn.classList.add('bg-stone-800', 'text-white');
+
+            renderGrid(area);
+            
+            // Reset detail panel
+            const panel = document.getElementById('detail-panel');
+            panel.innerHTML = `
+                <div class="text-center text-emerald-200/70">
+                    <span class="text-4xl block mb-2">👆</span>
+                    <p class="font-medium">下部のリストから自治体を選択してください</p>
+                </div>
+            `;
+            panel.className = 'bg-emerald-800 text-stone-50 rounded-xl shadow-md p-6 md:p-8 mb-8 min-h-[220px] flex flex-col justify-center transition-all duration-300 border border-emerald-900';
+        }
+
+        function showDetail(id) {
+            document.querySelectorAll('.municipality-card').forEach(c => c.classList.remove('selected'));
+            document.getElementById(`card-${id}`).classList.add('selected');
+
+            const m = municipalities.find(x => x.id === id);
+            const panel = document.getElementById('detail-panel');
+            
+            let bgClass = 'bg-emerald-800 border-emerald-900';
+            if(m.area === '備後') bgClass = 'bg-amber-900 border-amber-950';
+            if(m.area === '備中') bgClass = 'bg-blue-900 border-blue-950';
+            if(m.area === '美作') bgClass = 'bg-stone-800 border-stone-900';
+
+            let stakeholdersHtml = m.stakeholders.map(s => `<span class="stakeholder-badge">${s}</span>`).join('');
+
+            panel.className = `${bgClass} text-white rounded-xl shadow-md p-6 md:p-8 mb-8 min-h-[220px] transition-all duration-300 border`;
+            
+            panel.innerHTML = `
+                <div class="flex flex-col md:flex-row gap-6">
+                    <div class="md:w-1/3 border-b md:border-b-0 md:border-r border-white/20 pb-4 md:pb-0 md:pr-6">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-sm font-bold tracking-widest opacity-70 uppercase block">${m.pref} ${m.area}</span>
+                            <span class="text-xs bg-white/20 px-2 py-1 rounded">優先度 ${m.score}</span>
+                        </div>
+                        <h3 class="text-3xl font-black mb-4">${m.name}</h3>
+                        <div class="space-y-3">
+                            <div>
+                                <span class="text-xs opacity-60 block">主要地形特性</span>
+                                <span class="font-medium">${m.geo}</span>
+                            </div>
+                            <div>
+                                <span class="text-xs opacity-60 block">関連ステークホルダー</span>
+                                <div class="mt-1">${stakeholdersHtml}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="md:w-2/3 flex flex-col justify-center">
+                        <h4 class="text-sm font-bold opacity-70 mb-2 border-b border-white/20 pb-1">ドローン事業 導入戦略・アプローチ</h4>
+                        <p class="leading-relaxed text-sm md:text-base opacity-90">${m.desc}</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            switchTab('ranking'); // Start with ranking tab
+            renderGrid('all');
+        });
+
+    </script>
+</body>
+</html>
